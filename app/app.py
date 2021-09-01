@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, request
+import http
 
-from utils import load_data_in_memory
+import requests
+from flask import Flask, jsonify
 
 app = Flask(__name__)
 
@@ -10,44 +11,81 @@ def hello_world():
     return "Hello World!"
 
 
-def get_exact_values(key, value, data):
-    result = [row for row in data if row[key] == value]
+def make_poke_api_request(url):
+    data = None
+    result = requests.get(url)
 
-    return result
+    if result.status_code == http.HTTPStatus.OK:
+        data = result.json()
 
-
-def filter_email_domain(value, data):
-    result = [row for row in data if row["email"].split("@")[1] == value]
-
-    return result
+    return data
 
 
-@app.route("/users", methods=["GET"])
-def users():
-    file_data = load_data_in_memory()
-    limit = int(request.args.get("limit", 10))
+def search_pokemon(pokemons_data, pokemon_id):
+    pokemon_data = {}
 
-    id_ = request.args.get("id")
-    if id_:
-        file_data = get_exact_values("id", id_, file_data)
+    for pokemon in pokemons_data:
+        if pokemon["entry_number"] == pokemon_id:
+            pokemon_data = pokemon
+            break
 
-    else:
-        possible_exact_filters = ["department", "first_name", "gender", "last_name"]
+    return pokemon_data
 
-        for possible_filter in possible_exact_filters:
-            filter_value = request.args.get(possible_filter)
 
-            if filter_value:
-                file_data = get_exact_values(possible_filter, filter_value, file_data)
+def get_pokemon_language(pokemon_species_url):
+    species_data = make_poke_api_request(pokemon_species_url)
 
-        email_domain = request.args.get("email_domain")
-        if email_domain:
-            file_data = filter_email_domain(email_domain, file_data)
+    flavour_text_entries = species_data["flavor_text_entries"]
+    text = ""
 
-    if file_data:
-        file_data = file_data[:limit]
+    for flavour_text in flavour_text_entries:
+        if flavour_text["language"]["name"] == "en":
+            text = flavour_text["flavor_text"]
 
-    return jsonify(file_data)
+    return text
+
+
+@app.route("/pokedex/<int:pokemon_id>", methods=["GET"])
+def pokedex(pokemon_id=1):
+    """
+    Using the Kanto pokedex, this endpoint return the name of the pokemon with the messages that
+    explains some information about it.
+
+    :param pokemon_id: Int number from 1 to 150 to retrieve the data of the pokemon.
+    :return: Json data with 2 keys, status, and result. If the endpoint is executed correctly
+    the result key will have the name and the language of the pokemon.
+    """
+    request_result = {"result": "Bad Request", "status_code": http.HTTPStatus.BAD_REQUEST}
+    if 0 < pokemon_id <= 150:
+        pokedex_data = make_poke_api_request("https://pokeapi.co/api/v2/pokedex/2")
+
+        if pokedex_data:
+            pokemon = search_pokemon(pokedex_data["pokemon_entries"], pokemon_id)
+            if pokemon:
+                pokemon = pokemon["pokemon_species"]
+                name = pokemon["name"]
+                pokemon_language = get_pokemon_language(pokemon["url"])
+                request_result = {
+                    "result": {
+                        "pokemon_name": name,
+                        "pokemon_language": pokemon_language
+                    },
+                    "status_code": http.HTTPStatus.OK,
+                }
+
+            else:
+                request_result = {
+                    "result": "Not found",
+                    "status_code": http.HTTPStatus.NOT_FOUND
+                }
+
+        else:
+            request_result = {
+                "result": "Could not retrieve data",
+                "status_code": http.HTTPStatus.INTERNAL_SERVER_ERROR
+            }
+
+    return jsonify(request_result)
 
 
 if __name__ == '__main__':
