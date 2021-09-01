@@ -33,10 +33,11 @@ def search_pokemon(pokemons_data, pokemon_id):
 
 
 def get_pokemon_language(pokemon_species_url):
+    text, flavour_text_entries = "", {}
     species_data = make_poke_api_request(pokemon_species_url)
 
-    flavour_text_entries = species_data["flavor_text_entries"]
-    text = ""
+    if species_data:
+        flavour_text_entries = species_data["flavor_text_entries"]
 
     for flavour_text in flavour_text_entries:
         if flavour_text["language"]["name"] == "en":
@@ -55,7 +56,10 @@ def pokedex(pokemon_id=1):
     :return: Json data with 2 keys, status, and result. If the endpoint is executed correctly
     the result key will have the name and the language of the pokemon.
     """
-    request_result = {"result": "Bad Request", "status_code": http.HTTPStatus.BAD_REQUEST}
+    request_result = {
+        "result": "Bad Request",
+        "status_code": http.HTTPStatus.BAD_REQUEST,
+    }
     if 0 < pokemon_id <= 150:
         pokedex_data = make_poke_api_request("https://pokeapi.co/api/v2/pokedex/2")
 
@@ -68,7 +72,7 @@ def pokedex(pokemon_id=1):
                 request_result = {
                     "result": {
                         "pokemon_name": name,
-                        "pokemon_language": pokemon_language
+                        "pokemon_language": pokemon_language,
                     },
                     "status_code": http.HTTPStatus.OK,
                 }
@@ -76,17 +80,17 @@ def pokedex(pokemon_id=1):
             else:
                 request_result = {
                     "result": "Not found",
-                    "status_code": http.HTTPStatus.NOT_FOUND
+                    "status_code": http.HTTPStatus.NOT_FOUND,
                 }
 
         else:
             request_result = {
                 "result": "Could not retrieve data",
-                "status_code": http.HTTPStatus.INTERNAL_SERVER_ERROR
+                "status_code": http.HTTPStatus.INTERNAL_SERVER_ERROR,
             }
 
     return jsonify(request_result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
